@@ -8,7 +8,7 @@ categories = [ "misc" ]
 
 # Part 0: Infrastructure
 
-In order to run this, you'll need some sort of server (a VM in Azure, AWS, Google Cloud, or a VPS will do just fine for this purpose), and you'll likely want a domain name. If you've never worked with servers or DNS before, I'd recommend reading a bit about [DNS](https://www.redhat.com/en/blog/dns-domain-name-servers) and and follow a [guide to setup a basic website](https://krystal.io/blog/post/beginner-s-guide-to-setting-up-a-vps-virtual-private-server).
+In order to run this, you'll need some sort of server (a VM in Azure, AWS, Google Cloud, or a VPS will do just fine for this purpose), and you'll likely want a domain name. If you've never worked with servers or DNS before, I'd recommend reading a bit about [DNS](https://www.redhat.com/en/blog/dns-domain-name-servers) and follow a [guide to setup a basic website](https://krystal.io/blog/post/beginner-s-guide-to-setting-up-a-vps-virtual-private-server).
 
 # Part 1: Getting your platform up
 
