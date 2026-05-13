@@ -44,6 +44,33 @@ This output image will, by default, contain a `bzImage` file, which holds the ke
 
 Now, when you launch you'll see a login screen. From here, I'd recommend setting up a custom user for the challenge. In this case, you can change the shell for the `root` user to `/bin/false`, and add a new user to `/etc/passwd` and `/etc/shadow`.
 
+### Debugging your kernel
+
+Now that you can run your image, how do you actually attach a debugger to it? In qemu, there exists a `-gdb $PORT` flag which exposes a gdbstub on the provided port (notably, `-s` is short for `-gdb 1234`). You can also pass the flag `-S` which will start the VM in a stopped state, so it will wait for a `continue` instruction from `gdb` before continuing. In order to attach to this you can launch a `gdb` instance, and use the commands `target remote localhost:1234` followed by `continue`. In this case, this means editing your `start-qemu.sh` script to include the `-s -S` flags.
+
+To properly have symbols in the kernel, you'll want to extract the `vmlinux` from your kernel. You can extract this from your `bzImage` file using the [extract-vmlinux script](https://github.com/torvalds/linux/blob/master/scripts/extract-vmlinux). Note that you will need to have compiled your kernel with symbols, as can be set in buildroot through `Kernel hacking --> Compile-time checks and compiler options --> [*] Compile the kernel with debug info`.
+
+In pwntools, once you've edited your `start-qemu.sh` script and extracted the `vmlinux`, you can then automate this like so,
+
+```python
+from pwn import *
+
+context.arch = "amd64"
+
+gdbscript = """
+target remote localhost:1234
+continue
+"""
+
+io = process("./start-qemu.sh")
+
+gdb.attach(io, gdbscript=gdbscript, exe="./vmlinux")
+
+io.interactive()
+```
+
+Inside the VM, it may also be desirable to be able to see pointer offsets and such at runtime. For this, you'll need root in the VM, which is usually done by patching the init script in the challenge to not drop privileges or create a root user account for yourself. 
+
 ## Building a challenge
 
 ### Writing your kernel module
