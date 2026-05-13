@@ -33,7 +33,7 @@ copyright = "&copy; 2025, Emily Miller <br /> Hosted with <a href='https://tardi
 [params]
   description = "Emily Miller's portfolio website and technical blog!"      # Your meta description of the site
   header_title = "Emily Miller"                 # Your header title
-  header_subtitle = "Hey there! I'm Emily, a current student and tech enthuse. I'm especially interested in Cybersecurity and Vulnerability research, and write technical blogs describing predominantly binary exploitation and cryptography."
+  header_subtitle = "Hey there! I'm Emily, a current student and tech enthusiast. I'm particularly interested in Cybersecurity and Vulnerability Research, and write technical blogs describing binary exploitation, infrastructure, and some cryptography."
   home_image = "avatar.jpg"          # Path to header image starting from the static directory (optional)
   recent_posts = 5                           # Max amount of recent posts to show
   mainSections = ["posts", "post", "blog"]   # Main sections to include in recent posts
