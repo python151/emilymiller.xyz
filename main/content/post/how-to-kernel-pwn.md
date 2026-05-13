@@ -69,7 +69,7 @@ gdb.attach(io, gdbscript=gdbscript, exe="./vmlinux")
 io.interactive()
 ```
 
-Inside the VM, it may also be desirable to be able to see pointer offsets and such at runtime. For this, you'll need root in the VM, which is usually done by patching the init script in the challenge to not drop privileges or create a root user account for yourself. 
+Inside the VM, it may also be desirable to be able to see pointer offsets and such at runtime (i.e. reading from `/proc/kallsyms`, checking `dmesg` if this isn't already allowed, etc.). For this, you'll need root in the VM, which is usually done by patching the init script in the challenge to not drop privileges or create a root user account for yourself. See below for writing custom init scripts, though oftentimes if you're simply working on a challenge, the challenge author will have done most of this for you. You just need to build yourself some way of elevating privileges to root.
 
 ## Building a challenge
 
