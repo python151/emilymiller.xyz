@@ -1,7 +1,7 @@
 +++
 author = "Emily Miller"
 title = "A brief dive into CGI"
-date = "2025-10-31"
+date = "2100-10-31"
 description = "Common Gateway Interface (CGI) is one of the oldest technologies still in use today to make web applications."
 categories = [ "misc" ]
 +++
