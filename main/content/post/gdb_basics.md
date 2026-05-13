@@ -41,7 +41,7 @@ Now, let's see an example workflow.
 # Open the binary in gdb
 emily747@nix-framework /path/to/your % gdb ./binary
 # Disassemble the main function
-(gdb) disas main
+(gdb) disassemble main
 Dump of assembler code for function main:
    0x0000000000401156 <+0>:	    endbr64
    0x000000000040115a <+4>:	    push   rbp
@@ -51,6 +51,9 @@ Dump of assembler code for function main:
    0x0000000000401168 <+18>:	mov    eax,0x0
    0x000000000040116d <+23>:	pop    rbp
    0x000000000040116e <+24>:	ret
+# we can also shorten commands to substrings of the original command, as long as
+# it's enough for gdb to figure it out!
+(gdb) disas main
 # Break when the instruction pointer is 13 bytes past main
 # That is, break at a 13 byte offset to main
 (gdb) break *main+13
@@ -58,15 +61,39 @@ Breakpoint 1 at 0x401163
 # Run the program
 (gdb) run
 # The program will then pause at the breakpoint
+# We can use the print command to print out registers and information as we wish,
+# this is especially useful for doing maths on registers
+(gdb) print $sp+0x100
 # Print out the first 800 bytes on the stack in 8 byte chunks
 (gdb) x/100gx $sp
+...
+# To see what sections of memory are loaded, we can look at
+(gdb) info proc mappings
+... 
+# Prefixing a bash command with the ! character allows you to execute shell commands!
+(gdb) !ls
+my_folder/ my_other_folder/ my_file
+# We can also execute library functions directly!
+(gdb) call puts("Hello World!")
+Hello World!
 # Next we can step over the function call, such that it will
 # continue until main+18 automatically
 (gdb) step
 # And to continue the program's normal flow after that
-(gdb) c
+(gdb) continue
 ```
 
 It's important to remember that GDB is just a tool, not a magic bullet, and it
 tends to be a tool that doesn't hold your hand a lot. Just like any tool, it can
 only be really be learned with practice.
+
+#### What about remote debugging?
+
+Remote debugging is one of the reasons gdb has become so prolific, and is, in my opinion, one of the most important features of gdb. Remote debugging is facilitated through a remote connection between your instance of gdb (the client) to a gdbserver. The GDB Server needs to support the GDB Remote Serial Protocol, and is often referred to as a GDB Stub. 
+
+To connect to a gdbstub running at a specific port and ip-address (say `$IP` with port `$PORT`), we can run the following sequence of commands
+```bash
+emily747@nix-framework /path/to/your % gdb
+(gdb) target remote $PORT:$IP
+(gdb) c
+```
