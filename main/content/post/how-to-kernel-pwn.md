@@ -47,6 +47,27 @@ This can be done with a custom `init` script. In order to pass a custom `init` s
 
 I'd recommend placing most of your custom code in the same place. So, you'll want to copy your compiled `chall.ko` into something like `/challenge/chall.ko`.
 
+### Compiling your kernel module
+
+This is a more complex issue, but in short, you can use the Kernel's build system to build your challenge against the Kernel's specific headers. An example `Makefile` can be seen below:
+
+```Makefile
+obj-m += challenge.o
+
+# Disables protections for easy challenge
+ccflags-y += -fno-stack-protector
+ccflags-y += -U_FORTIFY_SOURCE
+ccflags-y += -fno-pie
+ccflags-y += -no-pie
+
+all:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+clean:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
+```
+
+
 ### Writing an init script
 
 Assuming you've kept the default settings, and you have a `rootfs.ext4` file, you can simply edit the file at `/sbin/init` to be your desired script. A template like the following is fairly standard to work with, and note that the script must switch to a long running process or the kernel will kill itself.
@@ -89,6 +110,75 @@ ENV JAIL_TIME=600
 ENV JAIL_MEM=384M
 ```
 At this point, depending on your build configurations, it may be necessary to tweak `start-qemu.sh` (for instance, to adjust filesystem mounting options or enabling / disabling runtime kernel protections).
+
+## Running with docker (but unhinged)!
+
+To take this a step further, we can completely automate the build process, so that the entire thing is done in Docker. An example of this can be seen below:
+
+```Dockerfile
+FROM debian:unstable@sha256:cc1675ddb1073d19ba9ef6fe9b9c625eceb02fccb9c0f7afbb4e60f16325c91d AS fs_builder
+RUN apt-get update && apt-get install -y which sed make binutils \
+    build-essential diffutils gcc g++ bash patch gzip bzip2 perl \
+    tar cpio unzip rsync file bc findutils gawk wget git
+RUN git clone https://github.com/buildroot/buildroot.git /tmp/buildroot
+COPY .config /tmp/buildroot/.config
+RUN --mount=type=cache,target=/tmp/buildroot/dl/,id=buildroot_dl \
+    cd /tmp/buildroot && make -j8 && \
+    mkdir -p /tmp/artifacts && \
+    cp -r /tmp/buildroot/output/build/linux-* /tmp/artifacts/ && \
+    cp /tmp/buildroot/output/images/rootfs.ext2 /tmp/artifacts/ && \
+    cp /tmp/buildroot/output/images/bzImage /tmp/artifacts/ && \
+    cp /tmp/buildroot/output/images/start-qemu.sh /tmp/artifacts/
+
+# Build the kernel module against the exact kernel buildroot produced
+FROM debian:unstable@sha256:cc1675ddb1073d19ba9ef6fe9b9c625eceb02fccb9c0f7afbb4e60f16325c91d AS mod_builder
+RUN apt-get update && apt-get install -y build-essential libelf-dev
+COPY --from=fs_builder /tmp/artifacts/linux-* /tmp/linux/
+COPY module/* /tmp/module/
+RUN cd /tmp/module && make KERNELDIR=/tmp/linux
+
+FROM debian:unstable@sha256:cc1675ddb1073d19ba9ef6fe9b9c625eceb02fccb9c0f7afbb4e60f16325c91d AS fs_patcher
+RUN apt-get update && apt-get install -y e2tools
+COPY --from=fs_builder /tmp/artifacts/rootfs.ext2 /tmp/rootfs.ext2
+COPY init /tmp/init
+COPY --from=mod_builder /tmp/module/*.ko /tmp/module.ko
+RUN e2rm /tmp/rootfs.ext2:/sbin/init
+RUN e2cp -p /tmp/init /tmp/rootfs.ext2:/sbin/
+RUN e2cp -p /tmp/module.ko /tmp/rootfs.ext2:/root/
+RUN e2cp /tmp/rootfs.ext2:/etc/passwd /tmp/passwd
+RUN echo 'ctf:x:1000:1000::/home/ctf:/bin/sh' >> /tmp/passwd
+RUN e2cp -p /tmp/passwd /tmp/rootfs.ext2:/etc/passwd
+RUN e2cp -p /tmp/rootfs.ext2:/etc/group /tmp/group
+RUN echo 'ctf:x:1000:' >> /tmp/group
+RUN e2cp -p /tmp/group /tmp/rootfs.ext2:/etc/group
+RUN e2mkdir /tmp/rootfs.ext2:/home/ctf
+
+FROM debian:unstable@sha256:cc1675ddb1073d19ba9ef6fe9b9c625eceb02fccb9c0f7afbb4e60f16325c91d
+RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86 socat e2tools && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=fs_builder /tmp/artifacts/bzImage ./
+COPY --from=fs_builder /tmp/artifacts/start-qemu.sh ./
+COPY --from=fs_patcher /tmp/rootfs.ext2 ./
+RUN sed -i "s/console=tty1/rw nokaslr/" start-qemu.sh
+RUN sed -i "s/-drive file=rootfs.ext2,if=virtio,format=raw/-drive file=rootfs.ext2,if=virtio,format=raw -snapshot/" start-qemu.sh
+COPY entrypoint.sh ./
+ENV FLAG=PWNED{FAKE_FLAG}
+RUN echo "PWNED{FAKE_FLAG}" > /tmp/flag.txt
+EXPOSE 5000
+CMD ["/app/entrypoint.sh"]
+```
+
+You'll also need to populate `entrypoint.sh`, `init`, `.config`, `module/challenge.c`, and `module/Makefile`. In this case, my entrypoint looks something like the following:
+
+```sh
+#!/bin/sh
+# Inject flag (mounted by scenario) into rootfs
+e2cp /tmp/flag.txt /app/rootfs.ext2:/root/flag.txt
+rm /tmp/flag.txt
+
+# Each connection gets its own QEMU with -snapshot (reads base image, writes to tmpfile)
+exec socat TCP-LISTEN:5000,reuseaddr,fork EXEC:"/app/start-qemu.sh --serial-only",stderr
+```
 
 ## More guides and resources
 
