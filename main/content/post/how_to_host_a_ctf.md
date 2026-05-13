@@ -92,7 +92,7 @@ For many challenges, especially for categories like rev, misc, and often crypto,
 
 When hosting is required however, it will generally fall under one of 3 categories. The first is to simply put it into a single container for everyone to access. This works well when there's no (or very little) global state, and it's difficult to modify the challenge as a standard user, this is often the case for simpler web challenges and some scripting based challenges. The second is jailed challenges. In jailed challenges, individual TCP connections are given new instances of a jailed binary --- this is very common for pwn based challenges. The last is fully instanced challenges. This is most commonly seen in more complex web challenges, but is seen around in other places as well. 
 
-Note that this is non-exhaustive, but covers the vast majority of challanges. Notably one thing this doesn't cover is kernel pwn challenges, which require nested virtualization and some fairly complex infrastructure that I won't go into here.
+Note that this is non-exhaustive, but covers the vast majority of challanges. Notably one thing this doesn't cover is kernel pwn challenges, which require nested virtualization and some fairly complex infrastructure that I won't go into here (Update: Read my [write-up on kernel pwn infrastructure](https://www.emilymiller.xyz/post/how_to_host_a_ctf/)).
 
 ## Part 2.0: General container hosting
 
