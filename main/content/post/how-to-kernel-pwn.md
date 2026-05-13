@@ -14,8 +14,11 @@ This guide will
 - Adding custom components to the stock image (namely custom kernel modules and init scripts)
 - Discuss enabling / disabling specific kernel protections
 - Demonstrate the use of containerization to deploy as a CTF challenge
+- Show a prototype of a fully reproducible kernel challenge build system
 
-## Building your image and running it with qemu
+## Getting Started
+
+### Building your first image
 
 To start, go to the the [buildroot download's page](https://buildroot.org/download.html) to download an LTS version of buildroot. From here, you can unzip it with `tar -xvf /path/to/my/file.tar.gz`.
 
@@ -35,21 +38,79 @@ make -j<max logical core number>`
 ```
 The output will be in `output/images/`.
 
+### Running your image
+
 This output image will, by default, contain a `bzImage` file, which holds the kernel itself, an `rootfs.ext4` file, which holds the root filesystem, and a `start-qemu.sh` script which will boot qemu for you.
 
 Now, when you launch you'll see a login screen. From here, I'd recommend setting up a custom user for the challenge. In this case, you can change the shell for the `root` user to `/bin/false`, and add a new user to `/etc/passwd` and `/etc/shadow`.
 
-## Adding custom components on startup
+## Building a challenge
 
-This can be done with a custom `init` script. In order to pass a custom `init` script, we need a custom `initramfs`. You can either build this into the kernel, or you can build this and run qemu with flags for a custom initramfs. The latter is the approach I'd recommend taking for CTFs, because you'll often want an easy and quick way of updating init scripts, and waiting for a full recompile takes a lot of time.
+### Writing your kernel module
 
-### Adding your custom kernel module
+Writing kernel modules is often _hard_ for beginners, because it's fundamentally working within a much larger codebase that's sparsely documented and can have disasterous consequences. For simpler CTF challenges, you really don't need much more than the basics. As a starting point, I've included the example below, which allows you to write directly into a buffer with no size check.
 
-I'd recommend placing most of your custom code in the same place. So, you'll want to copy your compiled `chall.ko` into something like `/challenge/chall.ko`.
+```C
+#include <linux/kernel.h>
+#include <linux/uidgid.h>
+#include <linux/module.h>
+#include <linux/proc_fs.h>
+#include <linux/uaccess.h>
+#include <linux/cred.h>
+#include <linux/sched.h>
+#include <linux/init_task.h>
+
+
+MODULE_DESCRIPTION("My suuuuper secure kernel module");
+MODULE_AUTHOR("emily747");
+MODULE_LICENSE("GPL");
+
+#define PROC_NAME "challenge"
+
+static ssize_t challenge_write(struct file *file,
+                          const char __user *user_buffer,
+                          size_t count,
+                          loff_t *ppos)
+{
+    char stack_buffer[64];
+    char* ptr = stack_buffer;
+
+    printk(KERN_INFO "[challenge] Writing %zu bytes\n", count);
+    if (!access_ok(user_buffer, count))
+        return -EFAULT;
+    __copy_from_user(ptr, user_buffer, count);
+
+    return count;
+}
+
+static const struct proc_ops proc_fops = {
+    .proc_write = challenge_write,
+};
+
+static struct proc_dir_entry *proc_entry;
+
+int challenge_init(void)
+{
+    proc_entry = proc_mkdir("challenge", NULL);
+    proc_create("kboff", 0666, proc_entry, &proc_fops);
+
+    printk(KERN_INFO "[challenge] Hello!\n");
+    printk(KERN_INFO "[challenge] Try to connect to me at /proc/challenge/kboff.\n");
+    return 0;
+}
+
+void challenge_exit(void)
+{
+    printk(KERN_INFO "[challenge] Goodbye!\n");
+}
+
+module_init(challenge_init);
+module_exit(challenge_exit);
+```
 
 ### Compiling your kernel module
 
-This is a more complex issue, but in short, you can use the Kernel's build system to build your challenge against the Kernel's specific headers. An example `Makefile` can be seen below:
+You'll need to use use the kernels build system to build your challenge against the kernel's specific headers. An example `Makefile` can be seen below:
 
 ```Makefile
 obj-m += challenge.o
@@ -67,6 +128,17 @@ clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
 ```
 
+This can be run like `make KERNELDIR=/path/to/kernel/headers/`, and will output a `challenge.ko` file.
+
+Importantly, this is both architecture and version dependent. In effect, you'll either want to compile on the target itself (feasible if it's a larger VM for researching) or cross-compile with headers from that VM. In the below examples, I mostly do the latter, predominantly because it's significantly faster and avoids needing to run our compilation stage in the VM itself.
+
+### Adding custom components on startup
+
+To add custom components on startup, use a custom `init` script. In order to pass a custom `init` script, we need put the script in the filesystem itself. You can either build this with the kernel or patch the filesystem after the fact. The latter is the approach I'd recommend taking for CTFs, because you'll often want an easy and quick way of updating `init`, modules, etc., and waiting for a full recompile takes a lot of time.
+
+### Adding your custom kernel module
+
+I'd recommend placing most of your custom code in the same place. So, you'll want to copy your compiled `chall.ko` into something like `/challenge/chall.ko`. Anecdotally people tend to dislike it when they have to tear apart a filesystem looking for the module. In my opinion it's quite a useful skill (and quite easy, a simple `grep` for the file extension would do, but I tend to include the specific `chall.ko` as a file in the distributable seperately).
 
 ### Writing an init script
 
@@ -85,11 +157,11 @@ exec busybox init
 
 Notice in the above script that the actual script switches to a login shell at the final step in the `busybox init`. If you wanted, you could simply rebuild the init script from scratch to launch directly into your binary. This would allow you to give a userspace pwn into kernel pwn if you wanted to (for instance, shellcoding into kernel pwn). Alternatively, you can set a users shell to your custom binary, which would launch them directly into the userspace program.
 
-Alternatively, if you wanted to build a jail breakout challenge, this same process could be used to provide kernel isolation.
+If you wanted to build a jail breakout challenge, this same process could be used to provide kernel isolation. A good example of this would be a seccomp restricted shellcoding challenge, where you need to disable seccomp by exploiting a kernel module. Some examples of this format are available on [pwn.college](https://pwn.college/system-security/kernel-security/).
 
-## How do I disable \[X\] protection?
+### How do I disable \[X\] protection?
 
-Some protections can be enabled or disabled at runtime (assuming a build with support for it). These include KASLR, SMAP, SMEP, NX, and PTI. These can be disabled by adding flags in qemu. For instance, to disable KASLR, you can use `-append "nokaslr"` (multiple options are delimited with a space), which will disable KASLR at runtime.
+Some protections can be enabled or disabled at runtime (assuming a build with support for it). These include KASLR, SMAP, SMEP, NX, and PTI (though, this can change depending on the architecture --- this is generally the case for x86/x86-64 though). These can be disabled by adding flags in qemu. For instance, to disable KASLR, you can use `-append "nokaslr"` (multiple options are delimited with a space), which will disable KASLR at runtime.
 
 Some protections can only be changed at compile time, namely canaries and SLUB/SLAB hardening. These can be changed by editing the `CONFIG_STACKPROTECTOR`, `CONFIG_SLAB_FREELIST_HARDENED`, etc. options in your `kconfig`. The easiest way to use a custom `kconfig` with buildroot is to use the menu build option (`make menuconfig`). 
 
@@ -113,7 +185,7 @@ At this point, depending on your build configurations, it may be necessary to tw
 
 ## Running with docker (but unhinged)!
 
-To take this a step further, we can completely automate the build process, so that the entire thing is done in Docker. An example of this can be seen below:
+To take this a step further, we can completely automate the build process, so that the entire thing is done in Docker. The major benefit of this is completely reproducable builds, but the major downside being the fact that it relies on docker caching layers to stop the kernel from fully rebubilding itself every time. In production, I recommend splitting this into two (one for building the filesystem / kernel, and the other for running VM). An example of this can be seen below:
 
 ```Dockerfile
 FROM debian:unstable@sha256:cc1675ddb1073d19ba9ef6fe9b9c625eceb02fccb9c0f7afbb4e60f16325c91d AS fs_builder
