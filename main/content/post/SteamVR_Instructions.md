@@ -99,11 +99,11 @@ in {
 }
 ```
 
-## Notes
+## Tips & Quirks
 
-I've found that restarting with the headset connected is the most reliable way of getting games to launch and everything working first try.
-
-Also, on the Valve Index, the audio is done over DisplayPort, and on an NVIDIA GPU all ports show as one audio device with multiple streams, so you may have to go into a secondary menu to see the option to select the headset.
+- I've found that restarting with the headset connected is the most reliable way of getting games to launch and everything working first try.
+- On the Valve Index, the audio is done over DisplayPort, and on an NVIDIA GPU all ports show as one audio device with multiple streams, so you may have to go into a secondary menu to see the option to select the headset.
+- You need to have SteamVR installed using a Linux Runtime as the compatibility layer for the lighthouse driver to be installed, though it shouldn't matter which version.
 
 ## Useful Resources
 
